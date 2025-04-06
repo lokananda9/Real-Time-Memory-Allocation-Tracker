@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
-import { MemoryBlock, MemoryOperation, MemoryStats, BackendMessage } from '../types/memory';
+import { MemoryBlock, MemoryOperation, MemoryStats, BackendMessage, MemoryBlockType } from '../types/memory';
 import { toast } from 'sonner';
 
 interface MemoryState {
@@ -136,7 +136,9 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           switch (message.type) {
             case 'memoryUpdate':
               if (Array.isArray(message.data)) {
-                dispatch({ type: 'SET_BLOCKS', payload: message.data as MemoryBlock[] });
+                // Ensure the incoming data matches MemoryBlock[] type
+                const typedData = message.data as MemoryBlock[];
+                dispatch({ type: 'SET_BLOCKS', payload: typedData });
               }
               break;
             case 'statsUpdate':
@@ -224,7 +226,7 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         
         if (startIndex !== -1 && consecutiveFreeBlocks === pagesNeeded) {
-          const updatedBlocks = [...blocks];
+          const updatedBlocks: MemoryBlock[] = [...blocks];
           
           for (let i = 0; i < pagesNeeded; i++) {
             updatedBlocks[startIndex + i] = {
@@ -256,7 +258,7 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         const updatedBlocks = blocks.map(block => 
           block.processId === operation.processId
-            ? { ...block, type: 'free', processId: undefined, pageNumber: undefined, segmentId: undefined }
+            ? { ...block, type: 'free' as MemoryBlockType, processId: undefined, pageNumber: undefined, segmentId: undefined }
             : block
         );
         
