@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { HardDrive, Layers, Table } from 'lucide-react';
 
 const AddressTranslation: React.FC = () => {
-  const { performOperation, stats } = useMemory();
+  const { performOperation, stats, pageTable, tlbEntries } = useMemory();
   const [virtualAddress, setVirtualAddress] = useState<string>('');
   const [translationResult, setTranslationResult] = useState<{
     virtualAddress?: number;
@@ -29,33 +29,40 @@ const AddressTranslation: React.FC = () => {
       return;
     }
     
-    // Simulate address translation
-    performOperation({
-      type: 'translateAddress',
-      virtualAddress: vAddr
-    });
-    
-    // For simulation purposes, we'll calculate these values here
+    // Calculate page parameters
     const pageSize = stats.pageSize * 1024 * 1024; // Convert MB to bytes
     const pageOffsetBits = Math.log2(pageSize);
     const pageOffset = vAddr & ((1 << pageOffsetBits) - 1);
     const vpn = vAddr >> pageOffsetBits;
     
-    // Simulate a TLB lookup and potential page fault
-    const tlbHit = Math.random() > 0.3; // 70% chance of TLB hit
-    const pageFault = !tlbHit && Math.random() > 0.6; // 40% chance of page fault if TLB miss
+    // Perform the actual address translation simulation
+    performOperation({
+      type: 'translateAddress',
+      virtualAddress: vAddr
+    });
     
-    // Generate a physical page number (in reality this would come from TLB or page table)
-    let ppn;
-    if (pageFault) {
-      ppn = null; // Page fault, no physical address
+    // Check TLB first (most realistic behavior)
+    const tlbEntry = tlbEntries.find(entry => entry.vpn === vpn && entry.valid);
+    const tlbHit = !!tlbEntry;
+    
+    // If TLB miss, check page table
+    let ppn = null;
+    let pageFault = false;
+    
+    if (tlbHit) {
+      ppn = tlbEntry.ppn;
     } else {
-      // Some random PPN that's not the same as VPN
-      ppn = (vpn + 100) % 1024;
+      const pageEntry = pageTable.find(entry => entry.vpn === vpn);
+      
+      if (!pageEntry || !pageEntry.valid) {
+        pageFault = true;
+      } else {
+        ppn = pageEntry.ppn;
+      }
     }
     
     // Calculate physical address if no page fault
-    const physicalAddress = pageFault ? null : (ppn << pageOffsetBits) | pageOffset;
+    const physicalAddress = pageFault || ppn === null ? null : (ppn << pageOffsetBits) | pageOffset;
     
     // Set translation result
     setTranslationResult({
