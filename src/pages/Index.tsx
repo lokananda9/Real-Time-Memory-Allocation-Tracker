@@ -7,8 +7,11 @@ import MemoryControls from '../components/MemoryControls';
 import MemoryLegend from '../components/MemoryLegend';
 import ConnectionStatus from '../components/ConnectionStatus';
 import BackendConnection from '../components/BackendConnection';
-import MemoryFacts from '../components/MemoryFacts'; // NEW IMPORT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import PageTable from '../components/PageTable';
+import TLB from '../components/TLB';
+import DiskMemory from '../components/DiskMemory';
+import AddressTranslation from '../components/AddressTranslation';
 
 const Index: React.FC = () => {
   return (
@@ -23,12 +26,25 @@ const Index: React.FC = () => {
             </div>
           </header>
 
-          <MemoryFacts /> {/* Added facts panel here */}
-
           <div className="grid grid-cols-12 gap-6">
             {/* Main memory visualization */}
             <div className="col-span-12 lg:col-span-8 space-y-6">
-              <MemoryGrid />
+              <Tabs defaultValue="physical">
+                <TabsList>
+                  <TabsTrigger value="physical">Physical Memory</TabsTrigger>
+                  <TabsTrigger value="disk">Disk Memory</TabsTrigger>
+                  <TabsTrigger value="address">Address Translation</TabsTrigger>
+                </TabsList>
+                <TabsContent value="physical">
+                  <MemoryGrid />
+                </TabsContent>
+                <TabsContent value="disk">
+                  <DiskMemory />
+                </TabsContent>
+                <TabsContent value="address">
+                  <AddressTranslation />
+                </TabsContent>
+              </Tabs>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <MemoryStats />
@@ -38,18 +54,24 @@ const Index: React.FC = () => {
             
             {/* Sidebar */}
             <div className="col-span-12 lg:col-span-4 space-y-6">
-              <Tabs defaultValue="legend" className="w-full">
-                <TabsList className="grid grid-cols-2">
+              <Tabs defaultValue="pagetable" className="w-full">
+                <TabsList className="grid grid-cols-3">
+                  <TabsTrigger value="pagetable">Page Table</TabsTrigger>
+                  <TabsTrigger value="tlb">TLB</TabsTrigger>
                   <TabsTrigger value="legend">Legend</TabsTrigger>
-                  <TabsTrigger value="backend">Backend</TabsTrigger>
                 </TabsList>
+                <TabsContent value="pagetable">
+                  <PageTable />
+                </TabsContent>
+                <TabsContent value="tlb">
+                  <TLB />
+                </TabsContent>
                 <TabsContent value="legend">
                   <MemoryLegend />
                 </TabsContent>
-                <TabsContent value="backend">
-                  <BackendConnection />
-                </TabsContent>
               </Tabs>
+              
+              <BackendConnection />
             </div>
           </div>
         </div>

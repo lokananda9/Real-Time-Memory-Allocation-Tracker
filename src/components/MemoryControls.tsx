@@ -64,9 +64,10 @@ const MemoryControls: React.FC = () => {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="allocate" className="w-full">
-          <TabsList className="grid grid-cols-2">
+          <TabsList className="grid grid-cols-3">
             <TabsTrigger value="allocate">Allocate</TabsTrigger>
             <TabsTrigger value="paging">Paging</TabsTrigger>
+            <TabsTrigger value="simulation">Simulation</TabsTrigger>
           </TabsList>
           
           <TabsContent value="allocate" className="space-y-4">
@@ -132,22 +133,42 @@ const MemoryControls: React.FC = () => {
               </Button>
             </div>
             
+            <Button 
+              onClick={handleSimulatePageFault} 
+              variant="secondary"
+              className="w-full"
+            >
+              Simulate Page Fault
+            </Button>
+          </TabsContent>
+          
+          <TabsContent value="simulation" className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <Button 
-                onClick={handleSimulatePageFault} 
-                variant="secondary"
+              <Button
+                onClick={startSimulation}
+                variant="outline"
                 className="w-full"
+                disabled={isSimulating}
               >
-                Simulate Page Fault
+                Start Simulation
               </Button>
-              <Button 
-                onClick={handleReset} 
-                variant="destructive" 
+              <Button
+                onClick={stopSimulation}
+                variant="outline"
                 className="w-full"
+                disabled={!isSimulating}
               >
-                Reset
+                Stop Simulation
               </Button>
             </div>
+            
+            <Button 
+              onClick={handleReset} 
+              variant="destructive" 
+              className="w-full"
+            >
+              Reset All
+            </Button>
           </TabsContent>
         </Tabs>
       </CardContent>
@@ -156,4 +177,3 @@ const MemoryControls: React.FC = () => {
 };
 
 export default MemoryControls;
-
