@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { HardDrive, Layers, Table } from 'lucide-react';
 
 const AddressTranslation: React.FC = () => {
-  const { performOperation, stats, pageTable, tlbEntries } = useMemory();
+  const { performOperation, stats, pageTable } = useMemory();
   const [virtualAddress, setVirtualAddress] = useState<string>('');
   const [translationResult, setTranslationResult] = useState<{
     virtualAddress?: number;
@@ -17,12 +17,19 @@ const AddressTranslation: React.FC = () => {
     pageOffset?: number;
     vpn?: number;
     ppn?: number;
-    tlbHit?: boolean;
     pageFault?: boolean;
   } | null>(null);
   
   const handleTranslate = () => {
-    const vAddr = parseInt(virtualAddress, 16);
+    // Check if the input is a valid hexadecimal number
+    const hexRegex = /^(0x)?[0-9a-fA-F]+$/;
+    if (!hexRegex.test(virtualAddress)) {
+      toast.error('Please enter a valid hexadecimal address');
+      return;
+    }
+
+    // Parse the virtual address as hexadecimal
+    const vAddr = parseInt(virtualAddress.replace(/^0x/, ''), 16);
     
     if (isNaN(vAddr)) {
       toast.error('Invalid hexadecimal address');
@@ -41,24 +48,15 @@ const AddressTranslation: React.FC = () => {
       virtualAddress: vAddr
     });
     
-    // Check TLB first (most realistic behavior)
-    const tlbEntry = tlbEntries.find(entry => entry.vpn === vpn && entry.valid);
-    const tlbHit = !!tlbEntry;
-    
-    // If TLB miss, check page table
+    // Find the page table entry
+    const pageEntry = pageTable.find(entry => entry.vpn === vpn);
     let ppn = null;
     let pageFault = false;
     
-    if (tlbHit) {
-      ppn = tlbEntry.ppn;
+    if (!pageEntry || !pageEntry.valid) {
+      pageFault = true;
     } else {
-      const pageEntry = pageTable.find(entry => entry.vpn === vpn);
-      
-      if (!pageEntry || !pageEntry.valid) {
-        pageFault = true;
-      } else {
-        ppn = pageEntry.ppn;
-      }
+      ppn = pageEntry.ppn;
     }
     
     // Calculate physical address if no page fault
@@ -71,17 +69,14 @@ const AddressTranslation: React.FC = () => {
       pageOffset,
       vpn,
       ppn,
-      tlbHit,
       pageFault
     });
     
     // Show appropriate toast message
     if (pageFault) {
       toast.error('Page fault occurred! Page not in physical memory.');
-    } else if (tlbHit) {
-      toast.success('TLB hit! Address translated using TLB.');
     } else {
-      toast.info('TLB miss! Address translated using page table.');
+      toast.success('Address translated successfully');
     }
   };
   
@@ -121,17 +116,10 @@ const AddressTranslation: React.FC = () => {
               
               <div className="text-sm font-medium text-muted-foreground">Translation Path:</div>
               <div className="flex items-center gap-1">
-                {translationResult.tlbHit ? (
-                  <div className="flex items-center text-green-400">
-                    <Layers size={16} className="mr-1" />
-                    TLB Hit
-                  </div>
-                ) : (
-                  <div className="flex items-center text-amber-400">
-                    <Table size={16} className="mr-1" />
-                    Page Table
-                  </div>
-                )}
+                <div className="flex items-center text-amber-400">
+                  <Table size={16} className="mr-1" />
+                  Page Table
+                </div>
               </div>
               
               {translationResult.pageFault ? (

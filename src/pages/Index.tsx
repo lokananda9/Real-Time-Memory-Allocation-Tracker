@@ -9,7 +9,6 @@ import ConnectionStatus from '../components/ConnectionStatus';
 import BackendConnection from '../components/BackendConnection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PageTable from '../components/PageTable';
-import TLB from '../components/TLB';
 import DiskMemory from '../components/DiskMemory';
 import AddressTranslation from '../components/AddressTranslation';
 
@@ -27,49 +26,39 @@ const Index: React.FC = () => {
           </header>
 
           <div className="grid grid-cols-12 gap-6">
-            {/* Main memory visualization */}
-            <div className="col-span-12 lg:col-span-8 space-y-6">
+            {/* Main content area */}
+            <div className="col-span-12 space-y-6">
+              {/* Memory visualization tabs */}
               <Tabs defaultValue="physical">
-                <TabsList>
+                <TabsList className="grid grid-cols-3">
                   <TabsTrigger value="physical">Physical Memory</TabsTrigger>
+                  <TabsTrigger value="logical">Logical Memory</TabsTrigger>
                   <TabsTrigger value="disk">Disk Memory</TabsTrigger>
-                  <TabsTrigger value="address">Address Translation</TabsTrigger>
                 </TabsList>
                 <TabsContent value="physical">
-                  <MemoryGrid />
+                  <MemoryGrid viewMode="physical" />
+                </TabsContent>
+                <TabsContent value="logical">
+                  <MemoryGrid viewMode="logical" />
                 </TabsContent>
                 <TabsContent value="disk">
                   <DiskMemory />
-                </TabsContent>
-                <TabsContent value="address">
-                  <AddressTranslation />
                 </TabsContent>
               </Tabs>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <MemoryStats />
-                <MemoryControls />
+                <div className="space-y-6">
+                  <AddressTranslation />
+                  <MemoryControls />
+                </div>
               </div>
-            </div>
-            
-            {/* Sidebar */}
-            <div className="col-span-12 lg:col-span-4 space-y-6">
-              <Tabs defaultValue="pagetable" className="w-full">
-                <TabsList className="grid grid-cols-3">
-                  <TabsTrigger value="pagetable">Page Table</TabsTrigger>
-                  <TabsTrigger value="tlb">TLB</TabsTrigger>
-                  <TabsTrigger value="legend">Legend</TabsTrigger>
-                </TabsList>
-                <TabsContent value="pagetable">
-                  <PageTable />
-                </TabsContent>
-                <TabsContent value="tlb">
-                  <TLB />
-                </TabsContent>
-                <TabsContent value="legend">
-                  <MemoryLegend />
-                </TabsContent>
-              </Tabs>
+              
+              {/* Sidebar moved into main area */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <PageTable />
+                <MemoryLegend />
+              </div>
               
               <BackendConnection />
             </div>

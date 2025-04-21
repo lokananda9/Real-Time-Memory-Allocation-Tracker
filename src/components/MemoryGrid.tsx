@@ -5,12 +5,16 @@ import MemoryBlock from './MemoryBlock';
 import { MemoryBlock as MemoryBlockType } from '../types/memory';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const MemoryGrid: React.FC = () => {
-  const { blocks } = useMemory();
+interface MemoryGridProps {
+  viewMode: 'physical' | 'logical';
+}
+
+const MemoryGrid: React.FC<MemoryGridProps> = ({ viewMode }) => {
+  const { blocks, logicalBlocks } = useMemory();
   const [selectedBlock, setSelectedBlock] = useState<MemoryBlockType | null>(null);
-  const [viewMode, setViewMode] = useState<'physical' | 'logical'>('physical');
+
+  const displayBlocks = viewMode === 'physical' ? blocks : logicalBlocks;
 
   const handleBlockClick = (block: MemoryBlockType) => {
     setSelectedBlock(block);
@@ -28,22 +32,14 @@ const MemoryGrid: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Memory Map</h2>
-        <Tabs
-          value={viewMode}
-          onValueChange={(value) => setViewMode(value as 'physical' | 'logical')}
-          className="w-[300px]"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="physical">Physical</TabsTrigger>
-            <TabsTrigger value="logical">Logical</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <h2 className="text-2xl font-bold">
+          {viewMode === 'physical' ? 'Physical' : 'Logical'} Memory Map
+        </h2>
       </div>
 
       <div className="border rounded-lg border-gray-700 p-2 overflow-hidden bg-gray-900">
         <div className="memory-grid overflow-y-auto max-h-[500px]">
-          {blocks.map((block) => (
+          {displayBlocks.map((block) => (
             <MemoryBlock 
               key={block.id} 
               block={block} 

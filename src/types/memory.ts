@@ -8,8 +8,7 @@ export type MemoryBlockType =
   | 'segment'   // Segment of memory
   | 'kernel'    // Kernel memory
   | 'system'    // System reserved memory
-  | 'disk'      // Disk memory (swap space)
-  | 'tlb';      // Translation lookaside buffer entry
+  | 'disk';     // Disk memory (swap space)
 
 // Memory block representation
 export interface MemoryBlock {
@@ -39,8 +38,6 @@ export interface MemoryStats {
   systemMemory: number;
   diskSize: number;
   usedDiskSpace: number;
-  tlbHits: number;
-  tlbMisses: number;
   pageFaults: number;
 }
 
@@ -54,15 +51,6 @@ export interface PageTableEntry {
   protection: number;  // Read/write/execute permissions
   onDisk: boolean;  // Whether page is currently on disk
   diskAddress?: number; // Location on disk if swapped
-}
-
-// Translation Lookaside Buffer Entry
-export interface TLBEntry {
-  vpn: number;     // Virtual Page Number
-  ppn: number;     // Physical Page Number
-  valid: boolean;  // Whether this entry is valid
-  lastUsed: number; // Timestamp of last access
-  processId: number; // Process ID this entry belongs to
 }
 
 // Memory operation types
@@ -90,6 +78,6 @@ export interface MemoryOperation {
 
 // WebSocket message format for C backend
 export interface BackendMessage {
-  type: 'memoryUpdate' | 'statsUpdate' | 'operation' | 'error' | 'pageTable' | 'tlbUpdate';
-  data: MemoryBlock[] | MemoryStats | MemoryOperation | string | PageTableEntry[] | TLBEntry[];
+  type: 'memoryUpdate' | 'statsUpdate' | 'operation' | 'error' | 'pageTable';
+  data: MemoryBlock[] | MemoryStats | MemoryOperation | string | PageTableEntry[];
 }

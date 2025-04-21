@@ -6,30 +6,29 @@ import {
   MemoryStats, 
   BackendMessage, 
   MemoryBlockType,
-  PageTableEntry,
-  TLBEntry
+  PageTableEntry
 } from '../types/memory';
 import { toast } from 'sonner';
 
 interface MemoryState {
   blocks: MemoryBlock[];
+  logicalBlocks: MemoryBlock[];
   diskBlocks: MemoryBlock[];
   stats: MemoryStats;
   isConnected: boolean;
   isSimulating: boolean;
   pageTable: PageTableEntry[];
-  tlbEntries: TLBEntry[];
   currentProcessId: number;
 }
 
 type MemoryAction = 
   | { type: 'SET_BLOCKS'; payload: MemoryBlock[] }
+  | { type: 'SET_LOGICAL_BLOCKS'; payload: MemoryBlock[] }
   | { type: 'SET_DISK_BLOCKS'; payload: MemoryBlock[] }
   | { type: 'SET_STATS'; payload: MemoryStats }
   | { type: 'SET_CONNECTED'; payload: boolean }
   | { type: 'SET_SIMULATING'; payload: boolean }
   | { type: 'SET_PAGE_TABLE'; payload: PageTableEntry[] }
-  | { type: 'SET_TLB'; payload: TLBEntry[] }
   | { type: 'SET_CURRENT_PROCESS'; payload: number }
   | { type: 'PERFORM_OPERATION'; payload: MemoryOperation };
 
@@ -53,19 +52,17 @@ const initialStats: MemoryStats = {
   systemMemory: 64,
   diskSize: 2048, // 2 GB swap space
   usedDiskSpace: 0,
-  tlbHits: 0,
-  tlbMisses: 0,
   pageFaults: 0,
 };
 
 const initialState: MemoryState = {
   blocks: [],
+  logicalBlocks: [],
   diskBlocks: [],
   stats: initialStats,
   isConnected: false,
   isSimulating: false,
   pageTable: [],
-  tlbEntries: [],
   currentProcessId: 1,
 };
 
@@ -105,6 +102,45 @@ const initializeBlocks = (): MemoryBlock[] => {
   return blocks;
 };
 
+// Initialize logical blocks (larger address space)
+const initializeLogicalBlocks = (): MemoryBlock[] => {
+  const blocks: MemoryBlock[] = [];
+  // Create a much larger virtual memory space (4x physical memory)
+  const totalLogicalBlocks = 1024; // 4096 MB total logical memory
+  
+  // Kernel space mapping (same as physical)
+  for (let i = 0; i < 32; i++) {
+    blocks.push({
+      id: `logical-kernel-${i}`,
+      type: 'kernel',
+      size: 4,
+      address: i * 4,
+    });
+  }
+  
+  // System space mapping (same as physical)
+  for (let i = 32; i < 48; i++) {
+    blocks.push({
+      id: `logical-system-${i}`,
+      type: 'system',
+      size: 4,
+      address: i * 4,
+    });
+  }
+  
+  // User space (much larger than physical)
+  for (let i = 48; i < totalLogicalBlocks; i++) {
+    blocks.push({
+      id: `logical-${i}`,
+      type: 'free',
+      size: 4,
+      address: i * 4,
+    });
+  }
+  
+  return blocks;
+};
+
 // Initialize disk blocks
 const initializeDiskBlocks = (): MemoryBlock[] => {
   const blocks: MemoryBlock[] = [];
@@ -125,15 +161,12 @@ const initializePageTable = (processId: number): PageTableEntry[] => {
   return [];
 };
 
-// Initialize empty TLB - will be filled during operation
-const initializeTLB = (): TLBEntry[] => {
-  return [];
-};
-
 const memoryReducer = (state: MemoryState, action: MemoryAction): MemoryState => {
   switch (action.type) {
     case 'SET_BLOCKS':
       return { ...state, blocks: action.payload };
+    case 'SET_LOGICAL_BLOCKS':
+      return { ...state, logicalBlocks: action.payload };
     case 'SET_DISK_BLOCKS':
       return { ...state, diskBlocks: action.payload };
     case 'SET_STATS':
@@ -144,8 +177,6 @@ const memoryReducer = (state: MemoryState, action: MemoryAction): MemoryState =>
       return { ...state, isSimulating: action.payload };
     case 'SET_PAGE_TABLE':
       return { ...state, pageTable: action.payload };
-    case 'SET_TLB':
-      return { ...state, tlbEntries: action.payload };
     case 'SET_CURRENT_PROCESS':
       return { ...state, currentProcessId: action.payload };
     case 'PERFORM_OPERATION':
@@ -166,9 +197,9 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Initialize with demo data
   useEffect(() => {
     dispatch({ type: 'SET_BLOCKS', payload: initializeBlocks() });
+    dispatch({ type: 'SET_LOGICAL_BLOCKS', payload: initializeLogicalBlocks() });
     dispatch({ type: 'SET_DISK_BLOCKS', payload: initializeDiskBlocks() });
     dispatch({ type: 'SET_PAGE_TABLE', payload: initializePageTable(1) });
-    dispatch({ type: 'SET_TLB', payload: initializeTLB() });
   }, []);
   
   const connect = (url: string) => {
@@ -260,75 +291,133 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   
   // Simulation logic for demonstration
   const simulateOperation = (operation: MemoryOperation) => {
-    const { blocks, stats, pageTable, tlbEntries, diskBlocks } = state;
+    const { blocks, logicalBlocks, stats, pageTable, diskBlocks } = state;
     
     switch (operation.type) {
       case 'allocate': {
         if (!operation.size) return;
         
-        // Find contiguous free blocks
+        // Allocate in logical memory first
         const size = operation.size;
         const pageSize = stats.pageSize;
         const pagesNeeded = Math.ceil(size / pageSize);
         
-        let startIndex = -1;
-        let consecutiveFreeBlocks = 0;
+        // Find free space in logical memory
+        let startLogicalIndex = -1;
+        let consecutiveFreeLogicalBlocks = 0;
         
-        for (let i = 0; i < blocks.length; i++) {
-          if (blocks[i].type === 'free') {
-            if (startIndex === -1) startIndex = i;
-            consecutiveFreeBlocks++;
+        for (let i = 48; i < logicalBlocks.length; i++) {  // Start after system space
+          if (logicalBlocks[i].type === 'free') {
+            if (startLogicalIndex === -1) startLogicalIndex = i;
+            consecutiveFreeLogicalBlocks++;
             
-            if (consecutiveFreeBlocks === pagesNeeded) break;
+            if (consecutiveFreeLogicalBlocks === pagesNeeded) break;
           } else {
-            startIndex = -1;
-            consecutiveFreeBlocks = 0;
+            startLogicalIndex = -1;
+            consecutiveFreeLogicalBlocks = 0;
           }
         }
         
-        if (startIndex !== -1 && consecutiveFreeBlocks === pagesNeeded) {
-          const updatedBlocks: MemoryBlock[] = [...blocks];
-          
-          // Set up the virtual-to-physical page mapping
-          const updatedPageTable = [...pageTable];
+        if (startLogicalIndex !== -1 && consecutiveFreeLogicalBlocks === pagesNeeded) {
+          const updatedLogicalBlocks = [...logicalBlocks];
           const processId = operation.processId || state.currentProcessId;
+          const updatedPageTable = [...pageTable];
           
+          // Allocate in physical memory if there's space
+          // For now, we'll just find individual free pages, they don't need to be contiguous in physical
+          const freePhysicalIndices: number[] = [];
+          const updatedBlocks = [...blocks];
+          
+          // Find free physical pages
+          for (let i = 48; i < blocks.length && freePhysicalIndices.length < pagesNeeded; i++) {
+            if (blocks[i].type === 'free') {
+              freePhysicalIndices.push(i);
+            }
+          }
+          
+          // Check if we have enough physical pages
+          const needSwapOut = freePhysicalIndices.length < pagesNeeded;
+          
+          if (needSwapOut) {
+            toast.warning('Not enough physical memory available, some pages will be swapped out');
+          }
+          
+          // Mark logical blocks as allocated
           for (let i = 0; i < pagesNeeded; i++) {
-            updatedBlocks[startIndex + i] = {
-              ...updatedBlocks[startIndex + i],
+            const logicalIndex = startLogicalIndex + i;
+            updatedLogicalBlocks[logicalIndex] = {
+              ...updatedLogicalBlocks[logicalIndex],
               type: 'allocated',
               processId: processId,
               pageNumber: i
             };
             
-            // Create page table entry for this allocation
-            const vpn = updatedPageTable.length; // Virtual page number
-            const ppn = startIndex + i; // Physical page number
+            // Create page table entry
+            const vpn = logicalIndex;  // Virtual Page Number
+            let ppn = -1;              // Physical Page Number (not yet assigned)
+            let onDisk = false;
             
+            // If we have a physical page available, use it
+            if (i < freePhysicalIndices.length) {
+              ppn = freePhysicalIndices[i];
+              // Mark the physical page as allocated
+              updatedBlocks[ppn] = {
+                ...updatedBlocks[ppn],
+                type: 'allocated',
+                processId: processId,
+                pageNumber: i
+              };
+            } else {
+              // This page will be on disk
+              onDisk = true;
+              // Find a free disk block
+              const freeDiskIndex = diskBlocks.findIndex(block => block.type === 'free');
+              if (freeDiskIndex >= 0) {
+                const updatedDiskBlocks = [...diskBlocks];
+                updatedDiskBlocks[freeDiskIndex] = {
+                  ...updatedDiskBlocks[freeDiskIndex],
+                  type: 'disk',
+                  pageNumber: i,
+                  processId: processId
+                };
+                dispatch({ type: 'SET_DISK_BLOCKS', payload: updatedDiskBlocks });
+                
+                // Update disk stats
+                const updatedStats = { ...stats };
+                updatedStats.usedDiskSpace += 20;
+                updatedStats.swappedPages++;
+                dispatch({ type: 'SET_STATS', payload: updatedStats });
+              }
+            }
+            
+            // Add page table entry
             updatedPageTable.push({
               vpn: vpn,
               ppn: ppn,
-              valid: true,
+              valid: !onDisk,
               dirty: false,
-              referenced: false,
-              protection: 7, // RWX permissions
-              onDisk: false
+              referenced: true,
+              protection: 7,  // RWX permissions
+              onDisk: onDisk,
+              diskAddress: onDisk ? Math.floor(Math.random() * 1000) * 4096 : undefined
             });
           }
           
           // Update stats
           const updatedStats = { ...stats };
-          updatedStats.usedMemory += pagesNeeded * pageSize;
-          updatedStats.freeMemory -= pagesNeeded * pageSize;
+          const physicalPagesAllocated = Math.min(pagesNeeded, freePhysicalIndices.length);
+          updatedStats.usedMemory += physicalPagesAllocated * pageSize;
+          updatedStats.freeMemory -= physicalPagesAllocated * pageSize;
           updatedStats.usedPages += pagesNeeded;
           
+          dispatch({ type: 'SET_LOGICAL_BLOCKS', payload: updatedLogicalBlocks });
           dispatch({ type: 'SET_BLOCKS', payload: updatedBlocks });
           dispatch({ type: 'SET_STATS', payload: updatedStats });
           dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
           
-          toast.success(`Allocated ${size} MB of memory`);
+          toast.success(`Allocated ${size} MB of memory (${pagesNeeded} pages)`);
         } else {
-          toast.error('Failed to allocate memory: Not enough contiguous free space');
+          toast.error('Failed to allocate memory: Not enough space in logical memory');
         }
         break;
       }
@@ -336,36 +425,59 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       case 'deallocate': {
         if (!operation.processId) return;
         
+        // Free physical memory
         const updatedBlocks = blocks.map(block => 
           block.processId === operation.processId
             ? { ...block, type: 'free' as MemoryBlockType, processId: undefined, pageNumber: undefined, segmentId: undefined }
             : block
         );
         
-        // Count freed pages
-        const freedBlocks = blocks.filter(block => block.processId === operation.processId);
-        const freedPages = freedBlocks.length;
+        // Free logical memory
+        const updatedLogicalBlocks = logicalBlocks.map(block => 
+          block.processId === operation.processId
+            ? { ...block, type: 'free' as MemoryBlockType, processId: undefined, pageNumber: undefined, segmentId: undefined }
+            : block
+        );
         
-        if (freedPages > 0) {
-          // Update page table to invalidate entries for this process
-          const updatedPageTable = pageTable.filter(entry => {
-            const blockWithPPN = blocks.find(block => block.address / stats.pageSize === entry.ppn);
-            return !blockWithPPN || blockWithPPN.processId !== operation.processId;
-          });
-          
-          // Update TLB to remove entries for this process
-          const updatedTLB = tlbEntries.filter(entry => entry.processId !== operation.processId);
-          
+        // Count freed pages
+        const freedPhysicalBlocks = blocks.filter(block => block.processId === operation.processId);
+        const freedLogicalBlocks = logicalBlocks.filter(block => block.processId === operation.processId);
+        
+        // Free disk blocks for this process
+        const updatedDiskBlocks = diskBlocks.map(block => 
+          block.processId === operation.processId
+            ? { ...block, type: 'free' as MemoryBlockType, processId: undefined, pageNumber: undefined }
+            : block
+        );
+        
+        // Update page table to remove entries for this process
+        const updatedPageTable = pageTable.filter(entry => {
+          const logicalBlock = logicalBlocks.find(block => block.address / stats.pageSize === entry.vpn);
+          return !logicalBlock || logicalBlock.processId !== operation.processId;
+        });
+        
+        if (freedLogicalBlocks.length > 0) {
           // Update stats
           const updatedStats = { ...stats };
-          updatedStats.usedMemory -= freedPages * stats.pageSize;
-          updatedStats.freeMemory += freedPages * stats.pageSize;
-          updatedStats.usedPages -= freedPages;
+          updatedStats.usedMemory -= freedPhysicalBlocks.length * stats.pageSize;
+          updatedStats.freeMemory += freedPhysicalBlocks.length * stats.pageSize;
+          updatedStats.usedPages -= freedLogicalBlocks.length;
+          
+          // Count freed swapped pages
+          const freedSwappedPages = diskBlocks.filter(
+            block => block.processId === operation.processId && block.type === 'disk'
+          ).length;
+          
+          if (freedSwappedPages > 0) {
+            updatedStats.swappedPages -= freedSwappedPages;
+            updatedStats.usedDiskSpace -= freedSwappedPages * 20;
+          }
           
           dispatch({ type: 'SET_BLOCKS', payload: updatedBlocks });
+          dispatch({ type: 'SET_LOGICAL_BLOCKS', payload: updatedLogicalBlocks });
+          dispatch({ type: 'SET_DISK_BLOCKS', payload: updatedDiskBlocks });
           dispatch({ type: 'SET_STATS', payload: updatedStats });
           dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
-          dispatch({ type: 'SET_TLB', payload: updatedTLB });
           
           toast.success(`Deallocated memory for process ${operation.processId}`);
         } else {
@@ -375,55 +487,12 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       
       case 'pageFault': {
-        // Update the page table to mark a page as invalid
+        // Handle page fault by swapping in a page from disk
         if (operation.pageNumber !== undefined) {
-          const pageNum = operation.pageNumber;
-          
-          // Find the page table entry if it exists
-          const entryIndex = pageTable.findIndex(entry => entry.vpn === pageNum);
-          
-          if (entryIndex >= 0) {
-            const updatedPageTable = [...pageTable];
-            
-            // Mark the page as invalid and on disk
-            updatedPageTable[entryIndex] = {
-              ...updatedPageTable[entryIndex],
-              valid: false,
-              onDisk: true,
-              diskAddress: Math.floor(Math.random() * 1000) * 4096
-            };
-            
-            // Update page table
-            dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
-            
-            // Update stats
-            const updatedStats = { ...stats };
-            updatedStats.pageFaults++;
-            dispatch({ type: 'SET_STATS', payload: updatedStats });
-            
-            // Also simulate moving to disk
-            const updatedDiskBlocks = [...diskBlocks];
-            const freeDiskBlock = updatedDiskBlocks.findIndex(block => block.type === 'free');
-            
-            if (freeDiskBlock >= 0) {
-              updatedDiskBlocks[freeDiskBlock] = {
-                ...updatedDiskBlocks[freeDiskBlock],
-                type: 'disk',
-                pageNumber: pageNum,
-                processId: state.currentProcessId
-              };
-              
-              dispatch({ type: 'SET_DISK_BLOCKS', payload: updatedDiskBlocks });
-              
-              // Update disk stats
-              updatedStats.usedDiskSpace += 20;
-              dispatch({ type: 'SET_STATS', payload: updatedStats });
-            }
-            
-            toast.warning(`Page fault occurred for page ${pageNum}`);
-          } else {
-            toast.error(`Page ${pageNum} not found in page table`);
-          }
+          performOperation({
+            type: 'swapIn',
+            pageNumber: operation.pageNumber
+          });
         }
         break;
       }
@@ -438,11 +507,9 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         if (diskBlockIndex >= 0) {
           // Update the page in the page table
-          const pageIndex = pageTable.findIndex(entry => entry.vpn === operation.pageNumber);
+          const pageIndex = pageTable.findIndex(entry => entry.vpn.toString().includes(operation.pageNumber?.toString() || ''));
           
           if (pageIndex >= 0) {
-            const updatedPageTable = [...pageTable];
-            
             // Find a free physical page
             const freePhysicalPage = blocks.findIndex(block => block.type === 'free');
             
@@ -456,17 +523,18 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 pageNumber: operation.pageNumber
               };
               
-              // Mark the page as valid and in memory
+              // Update page table
+              const updatedPageTable = [...pageTable];
               updatedPageTable[pageIndex] = {
                 ...updatedPageTable[pageIndex],
                 ppn: freePhysicalPage,
                 valid: true,
                 onDisk: false,
-                referenced: true, // It was just accessed
-                dirty: false // Fresh from disk, not modified yet
+                referenced: true,
+                dirty: false
               };
               
-              // Update disk blocks to free this block
+              // Free the disk block
               const updatedDiskBlocks = [...diskBlocks];
               updatedDiskBlocks[diskBlockIndex] = {
                 ...updatedDiskBlocks[diskBlockIndex],
@@ -482,7 +550,6 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               updatedStats.usedMemory += stats.pageSize;
               updatedStats.freeMemory -= stats.pageSize;
               
-              // Update state
               dispatch({ type: 'SET_BLOCKS', payload: updatedBlocks });
               dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
               dispatch({ type: 'SET_DISK_BLOCKS', payload: updatedDiskBlocks });
@@ -490,7 +557,20 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               
               toast.success(`Swapped in page ${operation.pageNumber}`);
             } else {
-              toast.error('No free physical pages available for swap in');
+              // No free physical pages, need to swap something out first
+              performOperation({
+                type: 'swapOut',
+                // Pick a random page that isn't the one we're trying to swap in
+                pageNumber: Math.floor(Math.random() * 10)
+              });
+              
+              // Then try again
+              setTimeout(() => {
+                performOperation({
+                  type: 'swapIn',
+                  pageNumber: operation.pageNumber
+                });
+              }, 100);
             }
           } else {
             toast.error(`Page ${operation.pageNumber} not found in page table`);
@@ -504,21 +584,27 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       case 'swapOut': {
         if (operation.pageNumber === undefined) return;
         
-        // Find page in page table
-        const pageIndex = pageTable.findIndex(entry => entry.vpn === operation.pageNumber);
+        // Find page in logical blocks
+        const logicalBlockIndex = logicalBlocks.findIndex(
+          block => block.pageNumber === operation.pageNumber && 
+                  block.processId === state.currentProcessId
+        );
         
-        if (pageIndex >= 0 && !pageTable[pageIndex].onDisk) {
-          const physicalPageNumber = pageTable[pageIndex].ppn;
+        if (logicalBlockIndex >= 0) {
+          // Find the corresponding page table entry
+          const pageIndex = pageTable.findIndex(entry => 
+            entry.vpn === logicalBlockIndex
+          );
           
-          // Find a free disk block
-          const freeDiskIndex = diskBlocks.findIndex(block => block.type === 'free');
-          
-          if (freeDiskIndex >= 0) {
-            // Update the physical memory
-            const updatedBlocks = [...blocks];
+          if (pageIndex >= 0 && !pageTable[pageIndex].onDisk) {
+            const physicalPageNumber = pageTable[pageIndex].ppn;
             
-            if (physicalPageNumber < updatedBlocks.length) {
+            // Find a free disk block
+            const freeDiskIndex = diskBlocks.findIndex(block => block.type === 'free');
+            
+            if (freeDiskIndex >= 0 && physicalPageNumber >= 0) {
               // Free the physical page
+              const updatedBlocks = [...blocks];
               updatedBlocks[physicalPageNumber] = {
                 ...updatedBlocks[physicalPageNumber],
                 type: 'free',
@@ -526,16 +612,16 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 pageNumber: undefined
               };
               
-              // Update the page table entry
+              // Update page table entry
               const updatedPageTable = [...pageTable];
               updatedPageTable[pageIndex] = {
                 ...updatedPageTable[pageIndex],
                 valid: false,
                 onDisk: true,
-                diskAddress: freeDiskIndex * 20 * 1024 * 1024 // Simple mapping to disk address
+                diskAddress: freeDiskIndex * 20 * 1024 * 1024
               };
               
-              // Update disk blocks
+              // Update disk block
               const updatedDiskBlocks = [...diskBlocks];
               updatedDiskBlocks[freeDiskIndex] = {
                 ...updatedDiskBlocks[freeDiskIndex],
@@ -551,29 +637,22 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               updatedStats.usedMemory -= stats.pageSize;
               updatedStats.freeMemory += stats.pageSize;
               
-              // Update state
               dispatch({ type: 'SET_BLOCKS', payload: updatedBlocks });
               dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
               dispatch({ type: 'SET_DISK_BLOCKS', payload: updatedDiskBlocks });
               dispatch({ type: 'SET_STATS', payload: updatedStats });
               
-              // Remove from TLB if present
-              const updatedTLB = tlbEntries.filter(entry => 
-                entry.vpn !== operation.pageNumber || entry.processId !== state.currentProcessId
-              );
-              dispatch({ type: 'SET_TLB', payload: updatedTLB });
-              
               toast.info(`Swapped out page ${operation.pageNumber}`);
-            } else {
-              toast.error('Invalid physical page reference');
+            } else if (freeDiskIndex < 0) {
+              toast.error('No free disk space available for swap');
             }
+          } else if (pageIndex >= 0) {
+            toast.warning(`Page ${operation.pageNumber} is already on disk`);
           } else {
-            toast.error('No free disk space available for swap');
+            toast.error(`Page ${operation.pageNumber} not found in page table`);
           }
-        } else if (pageIndex >= 0) {
-          toast.warning(`Page ${operation.pageNumber} is already on disk`);
         } else {
-          toast.error(`Page ${operation.pageNumber} not found in page table`);
+          toast.error(`Page ${operation.pageNumber} not found for current process`);
         }
         break;
       }
@@ -584,115 +663,63 @@ export const MemoryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Calculate page number and offset from virtual address
         const pageSize = stats.pageSize * 1024 * 1024; // Convert MB to bytes
         const pageOffsetBits = Math.log2(pageSize);
-        const pageNumber = operation.virtualAddress >> pageOffsetBits;
+        const vpn = operation.virtualAddress >> pageOffsetBits;
         
-        // First, check TLB
-        const tlbIndex = tlbEntries.findIndex(entry => 
-          entry.vpn === pageNumber && 
-          entry.valid && 
-          entry.processId === state.currentProcessId
-        );
+        // Check page table
+        const pageEntry = pageTable.find(entry => entry.vpn === vpn);
         
-        const updatedStats = { ...stats };
-        
-        if (tlbIndex >= 0) {
-          // TLB hit
-          updatedStats.tlbHits++;
+        if (!pageEntry || !pageEntry.valid) {
+          // Page fault
+          const updatedStats = { ...stats };
+          updatedStats.pageFaults++;
+          dispatch({ type: 'SET_STATS', payload: updatedStats });
           
-          // Update TLB entry's last used time
-          const updatedTLB = [...tlbEntries];
-          updatedTLB[tlbIndex] = {
-            ...updatedTLB[tlbIndex],
-            lastUsed: Date.now()
-          };
-          
-          dispatch({ type: 'SET_TLB', payload: updatedTLB });
+          // If this is a new virtual page, create a page table entry
+          if (!pageEntry) {
+            // Create a new page table entry for this virtual page
+            const updatedPageTable = [...pageTable];
+            updatedPageTable.push({
+              vpn: vpn,
+              ppn: 0, // Will be assigned when page is loaded
+              valid: false,
+              dirty: false,
+              referenced: true,
+              protection: 7, // RWX
+              onDisk: false // Not yet on disk
+            });
+            
+            dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
+          }
+          // If we have the page entry but it's on disk, we'll need to swap it in
+          else if (pageEntry && pageEntry.onDisk) {
+            setTimeout(() => {
+              performOperation({
+                type: 'pageFault',
+                pageNumber: vpn
+              });
+            }, 500);
+          }
         } else {
-          // TLB miss
-          updatedStats.tlbMisses++;
-          
-          // Check page table
-          const pageEntry = pageTable.find(entry => entry.vpn === pageNumber);
-          
-          if (!pageEntry || !pageEntry.valid) {
-            // Page fault
-            updatedStats.pageFaults++;
+          // Page hit - mark as referenced
+          const updatedPageTable = [...pageTable];
+          const index = updatedPageTable.findIndex(entry => entry.vpn === vpn);
+          if (index >= 0) {
+            updatedPageTable[index] = {
+              ...updatedPageTable[index],
+              referenced: true
+            };
             
-            // If this is a new virtual page, create a page table entry
-            if (!pageEntry) {
-              // Create a new page table entry
-              const updatedPageTable = [...pageTable];
-              updatedPageTable.push({
-                vpn: pageNumber,
-                ppn: 0, // This will be set when swapped in
-                valid: false,
-                dirty: false,
-                referenced: true,
-                protection: 7, // RWX
-                onDisk: false // Not yet on disk
-              });
-              
-              dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
-            }
-            
-            // If we have the page entry but it's on disk, we can simulate a page fault
-            else if (pageEntry && pageEntry.onDisk) {
-              // Schedule a swap in operation (in real system this would be done by OS)
-              setTimeout(() => {
-                performOperation({
-                  type: 'swapIn',
-                  pageNumber: pageNumber
-                });
-              }, 1000);
-            }
-          } else {
-            // Page table hit, add to TLB
-            const updatedTLB = [...tlbEntries];
-            
-            // If TLB is full, replace the least recently used entry
-            if (updatedTLB.length >= 8) {
-              let lruIndex = 0;
-              let lruTime = Date.now();
-              
-              updatedTLB.forEach((entry, index) => {
-                if (entry.lastUsed < lruTime) {
-                  lruTime = entry.lastUsed;
-                  lruIndex = index;
-                }
-              });
-              
-              // Replace LRU entry
-              updatedTLB[lruIndex] = {
-                vpn: pageNumber,
-                ppn: pageEntry.ppn,
-                valid: true,
-                lastUsed: Date.now(),
-                processId: state.currentProcessId
-              };
-            } else {
-              // Just add a new entry
-              updatedTLB.push({
-                vpn: pageNumber,
-                ppn: pageEntry.ppn,
-                valid: true,
-                lastUsed: Date.now(),
-                processId: state.currentProcessId
-              });
-            }
-            
-            dispatch({ type: 'SET_TLB', payload: updatedTLB });
+            dispatch({ type: 'SET_PAGE_TABLE', payload: updatedPageTable });
           }
         }
-        
-        dispatch({ type: 'SET_STATS', payload: updatedStats });
         break;
       }
       
       case 'reset': {
         dispatch({ type: 'SET_BLOCKS', payload: initializeBlocks() });
+        dispatch({ type: 'SET_LOGICAL_BLOCKS', payload: initializeLogicalBlocks() });
         dispatch({ type: 'SET_DISK_BLOCKS', payload: initializeDiskBlocks() });
         dispatch({ type: 'SET_PAGE_TABLE', payload: initializePageTable(state.currentProcessId) });
-        dispatch({ type: 'SET_TLB', payload: initializeTLB() });
         dispatch({ type: 'SET_STATS', payload: initialStats });
         toast.info('Memory state reset');
         break;
