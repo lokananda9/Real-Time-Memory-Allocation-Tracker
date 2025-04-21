@@ -29,8 +29,8 @@ const Index: React.FC = () => {
             {/* Main content area */}
             <div className="col-span-12 space-y-6">
               {/* Memory visualization tabs */}
-              <Tabs defaultValue="physical">
-                <TabsList className="grid grid-cols-3">
+              <Tabs defaultValue="physical" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="physical">Physical Memory</TabsTrigger>
                   <TabsTrigger value="logical">Logical Memory</TabsTrigger>
                   <TabsTrigger value="disk">Disk Memory</TabsTrigger>
