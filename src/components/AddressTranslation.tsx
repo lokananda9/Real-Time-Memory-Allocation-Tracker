@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { HardDrive, LayersThree, Table } from 'lucide-react';
+import { HardDrive, Layers, Table } from 'lucide-react';
 
 const AddressTranslation: React.FC = () => {
   const { performOperation, stats } = useMemory();
@@ -116,7 +116,7 @@ const AddressTranslation: React.FC = () => {
               <div className="flex items-center gap-1">
                 {translationResult.tlbHit ? (
                   <div className="flex items-center text-green-400">
-                    <LayersThree size={16} className="mr-1" />
+                    <Layers size={16} className="mr-1" />
                     TLB Hit
                   </div>
                 ) : (

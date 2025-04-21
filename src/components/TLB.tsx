@@ -16,12 +16,19 @@ const TLB: React.FC = () => {
     ? ((stats.tlbHits / (stats.tlbHits + stats.tlbMisses)) * 100).toFixed(1) 
     : "0.0";
   
+  // Helper function to determine badge variant
+  const getBadgeVariant = (rate: number) => {
+    if (rate > 80) return "default";
+    if (rate > 50) return "secondary";
+    return "destructive";
+  };
+  
   return (
     <Card className="bg-card border-gray-700">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle>Translation Lookaside Buffer (TLB)</CardTitle>
-          <Badge variant={parseFloat(hitRate) > 80 ? "success" : parseFloat(hitRate) > 50 ? "warning" : "destructive"} className="ml-2">
+          <Badge variant={getBadgeVariant(parseFloat(hitRate))} className="ml-2">
             {hitRate}% hit rate
           </Badge>
         </div>
