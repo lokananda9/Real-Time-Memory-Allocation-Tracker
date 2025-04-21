@@ -7,6 +7,7 @@ import MemoryControls from '../components/MemoryControls';
 import MemoryLegend from '../components/MemoryLegend';
 import ConnectionStatus from '../components/ConnectionStatus';
 import BackendConnection from '../components/BackendConnection';
+import MemoryFacts from '../components/MemoryFacts'; // NEW IMPORT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index: React.FC = () => {
@@ -21,7 +22,9 @@ const Index: React.FC = () => {
               <ConnectionStatus />
             </div>
           </header>
-          
+
+          <MemoryFacts /> {/* Added facts panel here */}
+
           <div className="grid grid-cols-12 gap-6">
             {/* Main memory visualization */}
             <div className="col-span-12 lg:col-span-8 space-y-6">

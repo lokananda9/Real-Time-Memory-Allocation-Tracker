@@ -6,23 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
 
 const MemoryControls: React.FC = () => {
   const { isConnected, isSimulating, connect, disconnect, startSimulation, stopSimulation, performOperation } = useMemory();
 
-  const [serverUrl, setServerUrl] = useState('ws://localhost:8765');
   const [processId, setProcessId] = useState(1);
   const [memorySize, setMemorySize] = useState(16);
   const [pageNumber, setPageNumber] = useState(1);
-
-  const handleConnect = () => {
-    if (!isConnected) {
-      connect(serverUrl);
-    } else {
-      disconnect();
-    }
-  };
 
   const handleAllocate = () => {
     performOperation({
@@ -70,14 +60,13 @@ const MemoryControls: React.FC = () => {
     <Card className="bg-card border-gray-700">
       <CardHeader>
         <CardTitle>Memory Controls</CardTitle>
-        <CardDescription>Control memory allocation and connect to backend</CardDescription>
+        <CardDescription>Control memory allocation and simulate operations</CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="allocate" className="w-full">
-          <TabsList className="grid grid-cols-3">
+          <TabsList className="grid grid-cols-2">
             <TabsTrigger value="allocate">Allocate</TabsTrigger>
             <TabsTrigger value="paging">Paging</TabsTrigger>
-            <TabsTrigger value="connection">Connection</TabsTrigger>
           </TabsList>
           
           <TabsContent value="allocate" className="space-y-4">
@@ -160,46 +149,6 @@ const MemoryControls: React.FC = () => {
               </Button>
             </div>
           </TabsContent>
-          
-          <TabsContent value="connection" className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="serverUrl">WebSocket Server URL</Label>
-              <Input 
-                id="serverUrl" 
-                value={serverUrl} 
-                onChange={(e) => setServerUrl(e.target.value)} 
-                placeholder="ws://localhost:8765"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <Button 
-                onClick={handleConnect} 
-                variant={isConnected ? "destructive" : "default"}
-                className="w-full"
-              >
-                {isConnected ? 'Disconnect' : 'Connect'}
-              </Button>
-              
-              <Button 
-                onClick={isSimulating ? stopSimulation : startSimulation}
-                variant={isSimulating ? "secondary" : "outline"}
-                className="w-full"
-                disabled={!isConnected}
-              >
-                {isSimulating ? 'Stop Simulation' : 'Start Simulation'}
-              </Button>
-            </div>
-            
-            <div className="text-sm">
-              <p className="mb-1">Status: <span className={isConnected ? "text-green-500" : "text-red-500"}>
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span></p>
-              <p className="text-xs text-muted-foreground">
-                Note: Without connecting to a C backend, simulated demo mode is used
-              </p>
-            </div>
-          </TabsContent>
         </Tabs>
       </CardContent>
     </Card>
@@ -207,3 +156,4 @@ const MemoryControls: React.FC = () => {
 };
 
 export default MemoryControls;
+
