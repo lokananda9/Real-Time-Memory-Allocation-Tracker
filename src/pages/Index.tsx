@@ -6,11 +6,11 @@ import MemoryStats from '../components/MemoryStats';
 import MemoryControls from '../components/MemoryControls';
 import MemoryLegend from '../components/MemoryLegend';
 import ConnectionStatus from '../components/ConnectionStatus';
-import BackendConnection from '../components/BackendConnection';
+// import BackendConnection from '../components/BackendConnection'; // removed
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PageTable from '../components/PageTable';
 import DiskMemory from '../components/DiskMemory';
-import AddressTranslation from '../components/AddressTranslation';
+// import AddressTranslation from '../components/AddressTranslation'; // removed
 
 const Index: React.FC = () => {
   return (
@@ -49,7 +49,7 @@ const Index: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <MemoryStats />
                 <div className="space-y-6">
-                  <AddressTranslation />
+                  {/* <AddressTranslation /> removed */}
                   <MemoryControls />
                 </div>
               </div>
@@ -60,7 +60,7 @@ const Index: React.FC = () => {
                 <MemoryLegend />
               </div>
               
-              <BackendConnection />
+              {/* <BackendConnection /> removed */}
             </div>
           </div>
         </div>
